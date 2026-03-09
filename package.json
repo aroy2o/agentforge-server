@@ -1,0 +1,29 @@
+{
+    "name": "agentforge-server",
+    "version": "1.0.0",
+    "description": "AgentForge Backend API",
+    "main": "index.js",
+    "scripts": {
+        "start": "node index.js",
+        "dev": "nodemon index.js"
+    },
+    "dependencies": {
+        "@chroma-core/default-embed": "^0.1.9",
+        "axios": "^1.13.6",
+        "bcryptjs": "^3.0.3",
+        "chromadb": "^3.3.1",
+        "cors": "^2.8.6",
+        "dotenv": "^17.3.1",
+        "express": "^5.2.1",
+        "jsonwebtoken": "^9.0.3",
+        "mongoose": "^9.2.4",
+        "node-cron": "^4.2.1",
+        "nodemailer": "^8.0.2",
+        "ollama": "^0.6.3",
+        "pdfkit": "^0.17.2",
+        "uuid": "^13.0.0"
+    },
+    "devDependencies": {
+        "nodemon": "^3.1.14"
+    }
+}

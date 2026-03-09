@@ -1,0 +1,26 @@
+node_modules
+.env
+.env.*
+!.env.example
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# ChromaDB local data
+chroma_data/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+indic/IndicTrans2/__pycache__/
+
+# OS
+.DS_Store
+
+# Test/debug output
+*.txt
+!README.md
+services/indic/IndicTrans2/
