@@ -9,6 +9,8 @@ const completedTaskSchema = new mongoose.Schema({
     agentCount: { type: Number, default: 0 },
     durationMs: { type: Number },
     createdAt: { type: Date, default: Date.now },
+    originalTask: { type: String },
+    optimisedTask: { type: String },
 });
 
 // Compound index for efficient sorting by user + date

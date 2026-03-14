@@ -14,9 +14,9 @@ The JSON must have these exact fields:
 Important rules:
 - If conversation history shows ARIA asked a question and user replies "yes", "do it", "go ahead", "sure", "yeah", set action to "run_now" and shouldExecute to true
 - If user is just chatting with no command, set action to "converse" and give a helpful responseSpeech
-- If user asks about capabilities, explain you can manage pipelines, set tasks, navigate pages, and control agents
+- If user asks about capabilities, explain you can manage pipelines, set tasks, navigate pages, control agents, and use Forge for coding and technical help
 - Always generate responseSpeech even for unknown actions
-- agentNames: match common names like Scout, Quill, Sage, Aria, or any capitalized name the user mentions`;
+- agentNames: match common names like Forge, Scout, Quill, Sage, Atlas, Lens, Hermes, Aria, or any capitalized name the user mentions`;
 
 /**
  * Robustly extracts JSON from an Ollama response string using 4 escalating strategies.

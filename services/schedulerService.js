@@ -6,6 +6,7 @@
  */
 
 const cron = require('node-cron');
+const cronParser = require('cron-parser');
 const transporter = require('./mailer');
 const { callOllama } = require('./ollama');
 const { searchWeb } = require('./tavily');
@@ -14,9 +15,27 @@ const Agent = require('../database/models/Agent');
 
 // Map of scheduleId -> cron task (for cleanup/cancellation)
 const activeCronJobs = new Map();
+const runningJobs = new Set();
+
+function getNextRunAt(cronExpression) {
+    try {
+        const expr = cronParser.CronExpressionParser.parse(cronExpression);
+        const next = expr.next();
+        return next?.toDate ? next.toDate() : new Date(next);
+    } catch {
+        return null;
+    }
+}
 
 async function executeSchedule(schedule) {
     const { _id, taskGoal, agentIds, email, name } = schedule;
+    const scheduleKey = _id.toString();
+
+    if (runningJobs.has(scheduleKey)) {
+        console.warn(`[Scheduler] Schedule ${scheduleKey} is already running. Skipping overlapping run.`);
+        return;
+    }
+    runningJobs.add(scheduleKey);
 
     console.log(`[Scheduler] Firing schedule "${name}" (${_id})`);
 
@@ -53,6 +72,7 @@ async function executeSchedule(schedule) {
 
         // Step 4: Send Real Content Email
         if (email) {
+            // Intentional Hermes task email from an explicit scheduled workflow.
             console.log(`[Scheduler] Sending real content email to ${email}`);
 
             // Extract Subject from output if present, else fallback
@@ -92,14 +112,61 @@ async function executeSchedule(schedule) {
         // Step 5: Log and Update DB
         console.log(`SCHEDULED JOB EXECUTED for ${_id}, recipient: ${email}, timestamp: ${new Date().toISOString()}`);
 
+        const nextRunAt = getNextRunAt(schedule.cronExpression);
         await Schedule.findByIdAndUpdate(_id, {
-            $set: { lastRunAt: new Date() },
+            $set: { lastRunAt: new Date(), nextRunAt, lastRunStatus: 'success', lastError: null },
             $inc: { runCount: 1 },
         });
 
     } catch (err) {
         console.error(`[Scheduler] Error running schedule ${_id}:`, err.message);
+
+        // Record failure in DB
+        try {
+            await Schedule.findByIdAndUpdate(_id, {
+                $set: {
+                    lastRunStatus: 'failed',
+                    lastError: String(err.message || 'Unknown error').slice(0, 500),
+                    lastErrorAt: new Date(),
+                },
+            });
+        } catch (dbErr) {
+            console.warn('[Scheduler] Failed to record error in DB:', dbErr.message);
+        }
+
+        // Send failure notification email to the schedule owner if email is set
+        if (email) {
+            try {
+                await transporter.sendMail({
+                    from: process.env.SMTP_USER,
+                    to: email,
+                    subject: `[AgentForge] Scheduled job failed: ${name || _id}`,
+                    html: `
+                        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #1f2937;">
+                            <header style="background: #fef2f2; padding: 16px 20px; border-radius: 8px 8px 0 0; border-bottom: 2px solid #ef4444;">
+                                <h2 style="margin: 0; color: #b91c1c; font-size: 16px;">Scheduled Job Failed</h2>
+                            </header>
+                            <div style="padding: 20px; background: #fff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+                                <p><strong>Schedule:</strong> ${name || _id}</p>
+                                <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+                                <p><strong>Error:</strong> ${String(err.message || 'Unknown error')}</p>
+                                <p style="color: #6b7280; font-size: 13px; margin-top: 16px;">
+                                    The job will attempt to run again at the next scheduled time.
+                                    You can also trigger a manual run from the AgentForge Scheduler page.
+                                </p>
+                            </div>
+                        </div>
+                    `,
+                });
+                console.log(`[Scheduler] Failure notification sent to ${email}`);
+            } catch (mailErr) {
+                console.warn('[Scheduler] Failed to send failure notification email:', mailErr.message);
+            }
+        }
+
         throw err; // Re-throw for runJobNow handling
+    } finally {
+        runningJobs.delete(scheduleKey);
     }
 }
 
@@ -118,6 +185,11 @@ function scheduleJob(schedule) {
 
     const task = cron.schedule(cronExpression, async () => {
         await executeSchedule(schedule);
+    });
+
+    const nextRunAt = getNextRunAt(cronExpression);
+    Schedule.findByIdAndUpdate(_id, { $set: { nextRunAt } }).catch((err) => {
+        console.warn(`[Scheduler] Failed to persist nextRunAt for schedule ${_id}: ${err.message}`);
     });
 
     activeCronJobs.set(_id.toString(), task);
